@@ -2,7 +2,7 @@ import { convexAuth } from "@convex-dev/auth/server";
 import Google from "@auth/core/providers/google";
 
 // Allowed email domains for Vinschool
-const ALLOWED_DOMAINS = ["stu.vinschool.edu.vn", "vinschool.edu.vn"];
+const ALLOWED_DOMAINS = ["stu.vinschool.edu.vn"];
 
 function isAllowedEmail(email: string): boolean {
   const domain = email.split("@")[1]?.toLowerCase();
@@ -17,7 +17,7 @@ export const { auth, signIn, signOut, store } = convexAuth({
       authorization: {
         params: {
           prompt: "select_account",
-          hd: "vinschool.edu.vn", // Hint to show only Vinschool accounts
+          hd: "stu.vinschool.edu.vn", // Hint to show only Vinschool student accounts
         },
       },
     }),
@@ -28,7 +28,7 @@ export const { auth, signIn, signOut, store } = convexAuth({
       if (args.profile?.email) {
         if (!isAllowedEmail(args.profile.email)) {
           throw new Error(
-            "Only Vinschool email addresses (@stu.vinschool.edu.vn or @vinschool.edu.vn) are allowed."
+            "Only Vinschool student email addresses (@stu.vinschool.edu.vn) are allowed."
           );
         }
       }

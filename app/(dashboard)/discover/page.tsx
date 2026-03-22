@@ -252,6 +252,7 @@ export default function DiscoverPage() {
         <div className="retro-card-lime p-4 mb-6">
           <h1 className="text-xl font-black uppercase">PATHFINDER QUIZ</h1>
           <p className="text-sm font-bold mt-1">Discover your strengths and interests</p>
+          <p className="text-xs mt-1 opacity-70">Dữ liệu làm quiz sẽ được thu thập để cho AI phân tích dữ liệu cách tốt nhất.</p>
         </div>
 
         {/* Progress */}

@@ -16,7 +16,7 @@ export default function LoginPage() {
       await signIn("google", { redirectTo: "/dashboard" });
     } catch (err) {
       setError(
-        "Only Vinschool email addresses (@stu.vinschool.edu.vn or @vinschool.edu.vn) are allowed."
+        "Only Vinschool student email addresses (@stu.vinschool.edu.vn) are allowed."
       );
       setIsLoading(false);
     }
