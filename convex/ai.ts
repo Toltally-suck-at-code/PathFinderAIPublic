@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenAI } from "@google/genai";
+import { generateDeterministicCareerMap, generateDeterministicSummary } from "./careerAlgorithm";
 
 // Initialize Gemini client
 const getAIClient = () => {
@@ -122,94 +123,89 @@ export const generateCareerMap = action({
       goals: v.array(v.string()),
     }),
   },
-  handler: async (ctx, args) => {
-    const ai = getAIClient();
+  handler: async (_ctx, args) => {
+    // Step 1: Deterministic algorithm locks in the top 3 clusters (the "main idea")
+    const baseMap = generateDeterministicCareerMap(args.quizResponses);
 
-    const prompt = `You are a career guidance expert helping a Vietnamese high school student discover potential career paths.
+    // Step 2: Gemini analyzes the data within those guardrails
+    try {
+      const ai = getAIClient();
 
-Based on the following quiz responses, generate a personalized career map:
+      const prompt = `You are a career guidance expert for Vietnamese high school students.
 
-**Interests:** ${args.quizResponses.interests.join(", ")}
-**Strengths:** ${args.quizResponses.strengths.join(", ")}
-**Working Style:**
+A student completed a career discovery quiz. Based on our scoring algorithm, their TOP 3 CAREER CLUSTERS have been determined as:
+1. ${baseMap.clusters[0].name} — ${baseMap.clusters[0].description}
+2. ${baseMap.clusters[1].name} — ${baseMap.clusters[1].description}
+3. ${baseMap.clusters[2].name} — ${baseMap.clusters[2].description}
+
+IMPORTANT: You MUST keep these exact 3 clusters in this exact order. Do NOT change, reorder, or replace them.
+
+Here are the student's quiz responses:
+- Interests: ${args.quizResponses.interests.join(", ")}
+- Strengths: ${args.quizResponses.strengths.join(", ")}
 - Team preference: ${args.quizResponses.workingStyle.teamPreference}
 - Planning style: ${args.quizResponses.workingStyle.planningStyle}
-**Values:** ${args.quizResponses.values.join(", ")}
-**Goals:** ${args.quizResponses.goals.join(", ")}
+- Values: ${args.quizResponses.values.join(", ")}
+- Goals: ${args.quizResponses.goals.join(", ")}
 
-Generate a JSON response with this exact structure:
+Analyze the student's data and generate a personalized career map. Return ONLY valid JSON with this structure:
 {
   "clusters": [
-    {
-      "name": "Career Cluster Name",
-      "description": "Brief description of this career area",
-      "whyItFits": "Personalized explanation of why this fits the student"
-    }
+    { "name": "${baseMap.clusters[0].name}", "description": "${baseMap.clusters[0].description}", "whyItFits": "1-2 sentence personalized explanation referencing their specific interests/strengths" },
+    { "name": "${baseMap.clusters[1].name}", "description": "${baseMap.clusters[1].description}", "whyItFits": "..." },
+    { "name": "${baseMap.clusters[2].name}", "description": "${baseMap.clusters[2].description}", "whyItFits": "..." }
   ],
   "subjects": [
-    {
-      "name": "Subject Name",
-      "priority": "high/medium/low",
-      "reason": "Why this subject is important for their path"
-    }
+    { "name": "Subject Name", "priority": "high/medium/low", "reason": "Why this subject matters for their path" }
   ],
   "skills": {
-    "hard": [
-      {
-        "name": "Skill Name",
-        "howToPractice": "Concrete suggestion for practicing this skill"
-      }
-    ],
-    "soft": [
-      {
-        "name": "Skill Name",
-        "howToPractice": "Concrete suggestion for developing this skill"
-      }
-    ]
+    "hard": [{ "name": "Skill", "howToPractice": "Concrete actionable suggestion" }],
+    "soft": [{ "name": "Skill", "howToPractice": "Concrete actionable suggestion" }]
   },
   "learningPaths": [
-    {
-      "step": 1,
-      "title": "Step Title",
-      "description": "What to do in this step",
-      "timeframe": "e.g., Now, Next 6 months, Grade 11-12"
-    }
+    { "step": 1, "title": "Step Title", "description": "What to do", "timeframe": "e.g. Now, Next 3 months, Grade 11-12" }
   ],
-  "extracurriculars": ["Activity 1", "Activity 2", "Activity 3"]
+  "extracurriculars": ["Activity 1", "Activity 2"]
 }
 
 Guidelines:
-- Provide exactly 3 career clusters
-- Include 4-6 subjects with clear priorities
-- Provide 3-4 hard skills and 3-4 soft skills
-- Create a 5-6 step learning path
-- Suggest 4-6 extracurricular activities
-- Keep explanations concise but actionable
-- Always show multiple options, never single-path predictions
-- Make suggestions specific to a Vietnamese high school context
+- Keep the 3 clusters EXACTLY as specified above (same names, same descriptions)
+- Include 4-6 subjects with priorities based on the locked clusters
+- Provide 3-4 hard skills and 3-4 soft skills relevant to the clusters
+- Create a 5-6 step learning path tailored to their planning style
+- Suggest 4-6 extracurricular activities available in Vietnamese high schools
+- Be specific and actionable, not generic
 
 Return ONLY the JSON, no additional text.`;
 
-    try {
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: prompt,
       });
 
       const responseText = response.text || "";
-
-      // Parse the JSON response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("Could not parse AI response");
-      }
+      if (jsonMatch) {
+        const aiMap = JSON.parse(jsonMatch[0]);
 
-      const careerMap = JSON.parse(jsonMatch[0]);
-      return careerMap;
+        // Validate that Gemini kept the correct clusters
+        const clustersValid =
+          aiMap.clusters?.length === 3 &&
+          aiMap.clusters[0]?.name === baseMap.clusters[0].name &&
+          aiMap.clusters[1]?.name === baseMap.clusters[1].name &&
+          aiMap.clusters[2]?.name === baseMap.clusters[2].name;
+
+        if (clustersValid && aiMap.subjects?.length >= 4 && aiMap.skills?.hard?.length >= 3) {
+          // Gemini followed the rules — use its enriched output
+          return aiMap;
+        }
+      }
     } catch (error) {
-      console.error("Career map generation error:", error);
-      throw new Error("Failed to generate career map. Please try again.");
+      console.error("Gemini analysis failed, using deterministic fallback:", error);
     }
+
+    // Fallback: if Gemini fails or doesn't follow rules, use deterministic map
+    return baseMap;
   },
 });
 
@@ -227,10 +223,12 @@ export const summarizeResponses = action({
       goals: v.array(v.string()),
     }),
   },
-  handler: async (ctx, args) => {
-    const ai = getAIClient();
+  handler: async (_ctx, args) => {
+    // Try Gemini for a natural-sounding summary
+    try {
+      const ai = getAIClient();
 
-    const prompt = `Summarize this student's profile in a friendly, encouraging way (3-4 sentences):
+      const prompt = `Summarize this Vietnamese high school student's profile in a friendly, encouraging way (3-4 sentences):
 
 Interests: ${args.quizResponses.interests.join(", ")}
 Strengths: ${args.quizResponses.strengths.join(", ")}
@@ -240,16 +238,16 @@ Goals: ${args.quizResponses.goals.join(", ")}
 
 Be specific about what makes this student unique. Don't use generic phrases.`;
 
-    try {
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: prompt,
       });
 
-      return { summary: response.text || "You have a unique combination of interests and strengths!" };
+      return { summary: response.text || generateDeterministicSummary(args.quizResponses) };
     } catch (error) {
+      // Fall back to deterministic summary
       console.error("Summary generation error:", error);
-      return { summary: "You have a unique combination of interests and strengths that will help guide your career journey!" };
+      return { summary: generateDeterministicSummary(args.quizResponses) };
     }
   },
 });
