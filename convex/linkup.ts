@@ -2,6 +2,29 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
+const LOOKING_FOR_MAX_LENGTH = 280;
+const INTRO_MESSAGE_MAX_LENGTH = 280;
+const MAX_PENDING_INTRO_REQUESTS = 5;
+const INTRO_REQUEST_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAX_INTRO_REQUESTS_PER_WINDOW = 5;
+const EMAIL_REVEAL_PENDING = "Accepted — use your verified Vinschool email to continue the conversation.";
+
+function normalizeRequiredText(value: string, fieldName: string, maxLength: number) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${fieldName} cannot be empty.`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} must be ${maxLength} characters or fewer.`);
+  }
+  return trimmed;
+}
+
+function getConnectionEmail(status: "pending" | "accepted" | "declined", email: string | undefined) {
+  if (status !== "accepted") return null;
+  return email ?? EMAIL_REVEAL_PENDING;
+}
+
 // Get user's linkup profile
 export const getLinkupProfile = query({
   args: {},
@@ -26,6 +49,12 @@ export const saveOrUpdateProfile = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
+    const normalizedLookingFor = normalizeRequiredText(
+      args.lookingFor,
+      "Looking for text",
+      LOOKING_FOR_MAX_LENGTH
+    );
+
     const existing = await ctx.db
       .query("linkupProfiles")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -33,7 +62,7 @@ export const saveOrUpdateProfile = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        lookingFor: args.lookingFor,
+        lookingFor: normalizedLookingFor,
         isVisible: args.isVisible ?? existing.isVisible,
         updatedAt: Date.now(),
       });
@@ -42,8 +71,8 @@ export const saveOrUpdateProfile = mutation({
 
     return await ctx.db.insert("linkupProfiles", {
       userId,
-      lookingFor: args.lookingFor,
-      isVisible: true,
+      lookingFor: normalizedLookingFor,
+      isVisible: args.isVisible ?? true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -102,7 +131,6 @@ export const getMatches = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
 
-    // Get current user's quiz responses
     const userQuiz = await ctx.db
       .query("quizResponses")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -110,26 +138,23 @@ export const getMatches = query({
 
     if (!userQuiz) return [];
 
-    // Get current user info
-    const currentUser = await ctx.db.get(userId);
-
-    // Get all other users with quiz responses
     const allQuizResponses = await ctx.db.query("quizResponses").collect();
     const otherResponses = allQuizResponses.filter((qr) => qr.userId !== userId);
 
-    // Calculate match scores
     const matches = await Promise.all(
       otherResponses.map(async (otherQuiz) => {
         const otherUser = await ctx.db.get(otherQuiz.userId);
-        if (!otherUser) return null;
+        if (!otherUser || !otherUser.profileComplete) return null;
 
-        // Check if user has linkup profile and is visible
         const linkupProfile = await ctx.db
           .query("linkupProfiles")
           .withIndex("by_user", (q) => q.eq("userId", otherQuiz.userId))
           .first();
 
-        // Calculate similarity scores
+        if (linkupProfile && !linkupProfile.isVisible) {
+          return null;
+        }
+
         const interestsSimilarity = calculateArraySimilarity(
           userQuiz.responses.interests,
           otherQuiz.responses.interests
@@ -147,18 +172,10 @@ export const getMatches = query({
           otherQuiz.responses.goals
         );
 
-        // Working style comparison
-        const workingStyleMatch =
-          userQuiz.responses.workingStyle.teamPreference ===
-            otherQuiz.responses.workingStyle.teamPreference &&
-          userQuiz.responses.workingStyle.planningStyle ===
-            otherQuiz.responses.workingStyle.planningStyle;
-
         let matchScore: number;
         let matchType: "similar" | "complementary";
 
         if (args.mode === "similar") {
-          // High similarity = good match for similar mode
           matchScore = Math.round(
             (interestsSimilarity * 0.3 +
               strengthsSimilarity * 0.25 +
@@ -168,8 +185,6 @@ export const getMatches = query({
           );
           matchType = "similar";
         } else {
-          // Low similarity in strengths = complementary
-          // But similar values/goals = aligned team
           const complementScore = 1 - strengthsSimilarity;
           matchScore = Math.round(
             (complementScore * 0.4 + valuesSimilarity * 0.3 + goalsSimilarity * 0.3) * 100
@@ -177,7 +192,6 @@ export const getMatches = query({
           matchType = "complementary";
         }
 
-        // Only return matches above 40%
         if (matchScore < 40) return null;
 
         return {
@@ -185,7 +199,6 @@ export const getMatches = query({
           name: otherUser.name || "Anonymous",
           grade: otherUser.grade || "Unknown",
           campus: otherUser.campus || "Unknown",
-          email: otherUser.email,
           interests: otherQuiz.responses.interests.slice(0, 3),
           strengths: otherQuiz.responses.strengths.slice(0, 3),
           matchScore,
@@ -195,7 +208,6 @@ export const getMatches = query({
       })
     );
 
-    // Filter out nulls and sort by match score
     return matches
       .filter((m): m is NonNullable<typeof m> => m !== null)
       .sort((a, b) => b.matchScore - a.matchScore)
@@ -231,7 +243,20 @@ export const createIntroRequest = mutation({
       throw new Error("Cannot send intro request to yourself");
     }
 
-    // Check if already sent a request
+    const message = normalizeRequiredText(args.message, "Introduction message", INTRO_MESSAGE_MAX_LENGTH);
+    const recipient = await ctx.db.get(args.toUserId);
+    if (!recipient || recipient.role !== "student") {
+      throw new Error("This student is not available for LinkUp requests.");
+    }
+
+    const recipientProfile = await ctx.db
+      .query("linkupProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", args.toUserId))
+      .first();
+    if (recipientProfile && !recipientProfile.isVisible) {
+      throw new Error("This student is not currently visible in LinkUp.");
+    }
+
     const existing = await ctx.db
       .query("introRequests")
       .withIndex("by_from_user", (q) => q.eq("fromUserId", userId))
@@ -242,12 +267,30 @@ export const createIntroRequest = mutation({
       throw new Error("Introduction request already sent");
     }
 
+    const sentRequests = await ctx.db
+      .query("introRequests")
+      .withIndex("by_from_user", (q) => q.eq("fromUserId", userId))
+      .collect();
+
+    const now = Date.now();
+    const recentRequests = sentRequests.filter(
+      (request) => now - request.createdAt <= INTRO_REQUEST_WINDOW_MS
+    );
+    if (recentRequests.length >= MAX_INTRO_REQUESTS_PER_WINDOW) {
+      throw new Error("You have reached today’s introduction limit. Please try again tomorrow.");
+    }
+
+    const pendingRequests = sentRequests.filter((request) => request.status === "pending");
+    if (pendingRequests.length >= MAX_PENDING_INTRO_REQUESTS) {
+      throw new Error("You already have too many pending introductions. Wait for a response first.");
+    }
+
     return await ctx.db.insert("introRequests", {
       fromUserId: userId,
       toUserId: args.toUserId,
-      message: args.message,
+      message,
       status: "pending",
-      createdAt: Date.now(),
+      createdAt: now,
     });
   },
 });
@@ -273,7 +316,7 @@ export const getReceivedIntroRequests = query({
           fromUser: fromUser
             ? {
                 name: fromUser.name,
-                email: fromUser.email,
+                email: getConnectionEmail(req.status, fromUser.email),
                 campus: fromUser.campus,
                 grade: fromUser.grade,
               }
@@ -305,7 +348,7 @@ export const getSentIntroRequests = query({
           toUser: toUser
             ? {
                 name: toUser.name,
-                email: toUser.email,
+                email: getConnectionEmail(req.status, toUser.email),
                 campus: toUser.campus,
                 grade: toUser.grade,
               }
@@ -329,6 +372,10 @@ export const respondToIntroRequest = mutation({
     const request = await ctx.db.get(args.requestId);
     if (!request || request.toUserId !== userId) {
       throw new Error("Not authorized");
+    }
+
+    if (request.status !== "pending") {
+      throw new Error("This introduction request has already been handled.");
     }
 
     await ctx.db.patch(args.requestId, {

@@ -40,7 +40,7 @@ export default function CounselorDashboardPage() {
   const grades = ["Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
 
   // Check if user is counselor
-  if (user && user.role !== "counselor") {
+  if (user && user.role !== "counselor" && user.role !== "admin") {
     return (
       <div className="max-w-5xl mx-auto">
         <div className="retro-card bg-white text-center py-12">

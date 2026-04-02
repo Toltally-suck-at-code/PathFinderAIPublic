@@ -3,8 +3,67 @@ import { action, mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { GoogleGenAI } from "@google/genai";
 import { generateDeterministicCareerMap, generateDeterministicSummary } from "./careerAlgorithm";
+import { auth } from "./auth";
 
-// Initialize Gemini client
+const CHAT_MESSAGE_MAX_LENGTH = 500;
+const CHAT_SESSION_ID_MAX_LENGTH = 120;
+const CHAT_HISTORY_LIMIT = 100;
+const AI_WINDOW_MS = 60 * 60 * 1000;
+const MAX_CHAT_REQUESTS_PER_WINDOW = 25;
+const MAX_MAP_REQUESTS_PER_WINDOW = 8;
+const MAX_SUMMARY_REQUESTS_PER_WINDOW = 15;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const RATE_MARKER_PREFIX = "[rate]:";
+
+function normalizeLimitedText(value: string, fieldName: string, maxLength: number) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${fieldName} cannot be empty.`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} must be ${maxLength} characters or fewer.`);
+  }
+  return trimmed;
+}
+
+function getRateLimit(operation: "chat" | "map" | "summary") {
+  if (operation === "chat") return MAX_CHAT_REQUESTS_PER_WINDOW;
+  if (operation === "map") return MAX_MAP_REQUESTS_PER_WINDOW;
+  return MAX_SUMMARY_REQUESTS_PER_WINDOW;
+}
+
+async function requireValidUser(ctx: any, userId: string) {
+  const authedUserId = await auth.getUserId(ctx);
+  if (!authedUserId) {
+    throw new Error("Not authenticated");
+  }
+
+  if (authedUserId !== userId) {
+    throw new Error("Not authorized");
+  }
+
+  return authedUserId;
+}
+
+async function ensureWithinRateLimit(ctx: any, userId: string, operation: "chat" | "map" | "summary") {
+  const count = await ctx.runQuery(api.ai.getRecentAiUsageCount, {
+    userId: userId as any,
+    since: Date.now() - AI_WINDOW_MS,
+    operation,
+  });
+
+  if (count >= getRateLimit(operation)) {
+    throw new Error("You’ve reached the hourly AI usage limit. Please try again later.");
+  }
+
+  await ctx.runMutation(api.ai.storeChatMessage, {
+    userId: userId as any,
+    sessionId: `rate-${operation}-${userId}`.slice(0, CHAT_SESSION_ID_MAX_LENGTH),
+    role: "assistant",
+    content: `${RATE_MARKER_PREFIX}${operation}:${Date.now()}`,
+  });
+}
+
 const getAIClient = () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -13,7 +72,6 @@ const getAIClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// Chat with AI during quiz for clarification
 export const chatWithAI = action({
   args: {
     userId: v.id("users"),
@@ -25,6 +83,11 @@ export const chatWithAI = action({
     }),
   },
   handler: async (ctx, args) => {
+    await requireValidUser(ctx, args.userId);
+    await ensureWithinRateLimit(ctx, args.userId, "chat");
+
+    const message = normalizeLimitedText(args.message, "Message", CHAT_MESSAGE_MAX_LENGTH);
+    const sessionId = normalizeLimitedText(args.sessionId, "Session ID", CHAT_SESSION_ID_MAX_LENGTH);
     const ai = getAIClient();
 
     const systemPrompt = `You are a friendly career guidance assistant for high school students at Vinschool in Vietnam.
@@ -45,26 +108,27 @@ Guidelines:
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: GEMINI_MODEL,
         contents: [
           { role: "user", parts: [{ text: systemPrompt }] },
-          { role: "user", parts: [{ text: args.message }] },
+          { role: "user", parts: [{ text: message }] },
         ],
       });
 
-      const aiMessage = response.text || "I'm here to help! Could you tell me more about what you're thinking?";
+      const aiMessage = (response.text || "I'm here to help! Could you tell me more about what you're thinking?")
+        .trim()
+        .slice(0, CHAT_MESSAGE_MAX_LENGTH);
 
-      // Store the chat message
       await ctx.runMutation(api.ai.storeChatMessage, {
         userId: args.userId,
-        sessionId: args.sessionId,
+        sessionId,
         role: "user",
-        content: args.message,
+        content: message,
       });
 
       await ctx.runMutation(api.ai.storeChatMessage, {
         userId: args.userId,
-        sessionId: args.sessionId,
+        sessionId,
         role: "assistant",
         content: aiMessage,
       });
@@ -79,7 +143,6 @@ Guidelines:
   },
 });
 
-// Store chat messages
 export const storeChatMessage = mutation({
   args: {
     userId: v.id("users"),
@@ -88,28 +151,76 @@ export const storeChatMessage = mutation({
     content: v.string(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("chatMessages", {
+    const sessionId = normalizeLimitedText(args.sessionId, "Session ID", CHAT_SESSION_ID_MAX_LENGTH);
+    const content = normalizeLimitedText(args.content, "Content", CHAT_MESSAGE_MAX_LENGTH);
+
+    const insertedId = await ctx.db.insert("chatMessages", {
       userId: args.userId,
-      sessionId: args.sessionId,
+      sessionId,
       role: args.role,
-      content: args.content,
+      content,
       createdAt: Date.now(),
     });
+
+    if (!sessionId.startsWith("rate-")) {
+      const sessionMessages = await ctx.db
+        .query("chatMessages")
+        .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+        .collect();
+
+      const overflow = sessionMessages.length - CHAT_HISTORY_LIMIT;
+      if (overflow > 0) {
+        const sortedMessages = sessionMessages.sort((a, b) => a.createdAt - b.createdAt);
+        for (const message of sortedMessages.slice(0, overflow)) {
+          await ctx.db.delete(message._id);
+        }
+      }
+    }
+
+    return insertedId;
   },
 });
 
-// Get chat history for a session
 export const getChatHistory = query({
   args: { sessionId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const sessionId = normalizeLimitedText(args.sessionId, "Session ID", CHAT_SESSION_ID_MAX_LENGTH);
+    const userId = await auth.getUserId(ctx);
+    if (!userId) return [];
+
+    const messages = await ctx.db
       .query("chatMessages")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .collect();
+
+    return messages.filter((message) => message.userId === userId);
   },
 });
 
-// Generate career map from quiz responses
+export const getRecentAiUsageCount = query({
+  args: {
+    userId: v.id("users"),
+    since: v.number(),
+    operation: v.union(v.literal("chat"), v.literal("map"), v.literal("summary")),
+  },
+  handler: async (ctx, args) => {
+    const authedUserId = await auth.getUserId(ctx);
+    if (!authedUserId || authedUserId !== args.userId) {
+      return 0;
+    }
+
+    const messages = await ctx.db
+      .query("chatMessages")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .collect();
+
+    const prefix = `${RATE_MARKER_PREFIX}${args.operation}:`;
+    return messages.filter(
+      (message) => message.createdAt >= args.since && message.content.startsWith(prefix)
+    ).length;
+  },
+});
+
 export const generateCareerMap = action({
   args: {
     quizResponses: v.object({
@@ -123,11 +234,13 @@ export const generateCareerMap = action({
       goals: v.array(v.string()),
     }),
   },
-  handler: async (_ctx, args) => {
-    // Step 1: Deterministic algorithm locks in the top 3 clusters (the "main idea")
+  handler: async (ctx, args) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    await ensureWithinRateLimit(ctx, userId, "map");
+
     const baseMap = generateDeterministicCareerMap(args.quizResponses);
 
-    // Step 2: Gemini analyzes the data within those guardrails
     try {
       const ai = getAIClient();
 
@@ -179,7 +292,7 @@ Guidelines:
 Return ONLY the JSON, no additional text.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: GEMINI_MODEL,
         contents: prompt,
       });
 
@@ -188,7 +301,6 @@ Return ONLY the JSON, no additional text.`;
       if (jsonMatch) {
         const aiMap = JSON.parse(jsonMatch[0]);
 
-        // Validate that Gemini kept the correct clusters
         const clustersValid =
           aiMap.clusters?.length === 3 &&
           aiMap.clusters[0]?.name === baseMap.clusters[0].name &&
@@ -196,7 +308,6 @@ Return ONLY the JSON, no additional text.`;
           aiMap.clusters[2]?.name === baseMap.clusters[2].name;
 
         if (clustersValid && aiMap.subjects?.length >= 4 && aiMap.skills?.hard?.length >= 3) {
-          // Gemini followed the rules — use its enriched output
           return aiMap;
         }
       }
@@ -204,12 +315,10 @@ Return ONLY the JSON, no additional text.`;
       console.error("Gemini analysis failed, using deterministic fallback:", error);
     }
 
-    // Fallback: if Gemini fails or doesn't follow rules, use deterministic map
     return baseMap;
   },
 });
 
-// Summarize quiz responses for review
 export const summarizeResponses = action({
   args: {
     quizResponses: v.object({
@@ -223,8 +332,11 @@ export const summarizeResponses = action({
       goals: v.array(v.string()),
     }),
   },
-  handler: async (_ctx, args) => {
-    // Try Gemini for a natural-sounding summary
+  handler: async (ctx, args) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    await ensureWithinRateLimit(ctx, userId, "summary");
+
     try {
       const ai = getAIClient();
 
@@ -239,13 +351,12 @@ Goals: ${args.quizResponses.goals.join(", ")}
 Be specific about what makes this student unique. Don't use generic phrases.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: GEMINI_MODEL,
         contents: prompt,
       });
 
       return { summary: response.text || generateDeterministicSummary(args.quizResponses) };
     } catch (error) {
-      // Fall back to deterministic summary
       console.error("Summary generation error:", error);
       return { summary: generateDeterministicSummary(args.quizResponses) };
     }

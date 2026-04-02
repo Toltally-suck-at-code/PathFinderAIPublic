@@ -1,12 +1,49 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import Google from "@auth/core/providers/google";
 
-// Allowed email domains for Vinschool
-const ALLOWED_DOMAINS = ["stu.vinschool.edu.vn"];
+type UserRole = "student" | "counselor" | "partner" | "admin";
+
+const DEFAULT_ALLOWED_DOMAINS = ["stu.vinschool.edu.vn", "vinschool.edu.vn"];
+
+function parseList(input: string | undefined): string[] {
+  if (!input) return [];
+  return input
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+    .map((item) => item.replace(/^@/, ""));
+}
+
+function parseEmailList(input: string | undefined): string[] {
+  if (!input) return [];
+  return input
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.includes("@"));
+}
+
+const allowedDomains = (() => {
+  const configured = parseList(process.env.ALLOWED_EMAIL_DOMAINS);
+  return configured.length > 0 ? configured : DEFAULT_ALLOWED_DOMAINS;
+})();
+
+const bootstrapAdminEmails = parseEmailList(process.env.PILOT_ADMIN_EMAILS);
+const bootstrapCounselorEmails = parseEmailList(process.env.PILOT_COUNSELOR_EMAILS);
+
+function getEmailDomain(email: string): string {
+  return email.split("@")[1]?.toLowerCase() ?? "";
+}
 
 function isAllowedEmail(email: string): boolean {
-  const domain = email.split("@")[1]?.toLowerCase();
-  return ALLOWED_DOMAINS.includes(domain);
+  const domain = getEmailDomain(email);
+  return allowedDomains.includes(domain);
+}
+
+function getInitialRole(email: string): UserRole {
+  const normalized = email.toLowerCase();
+  if (bootstrapAdminEmails.includes(normalized)) return "admin";
+  if (bootstrapCounselorEmails.includes(normalized)) return "counselor";
+  return "student";
 }
 
 export const { auth, signIn, signOut, store } = convexAuth({
@@ -17,32 +54,29 @@ export const { auth, signIn, signOut, store } = convexAuth({
       authorization: {
         params: {
           prompt: "select_account",
-          hd: "stu.vinschool.edu.vn", // Hint to show only Vinschool student accounts
         },
       },
     }),
   ],
   callbacks: {
     async createOrUpdateUser(ctx, args) {
-      // Validate email domain
-      if (args.profile?.email) {
-        if (!isAllowedEmail(args.profile.email)) {
-          throw new Error(
-            "Only Vinschool student email addresses (@stu.vinschool.edu.vn) are allowed."
-          );
-        }
+      const email = args.profile?.email?.toLowerCase();
+      if (!email || !email.includes("@")) {
+        throw new Error("A valid Vinschool email address is required.");
+      }
+
+      if (!isAllowedEmail(email)) {
+        throw new Error("Only approved Vinschool email domains are allowed.");
       }
 
       if (args.existingUserId) {
-        // User already exists, return existing ID
         return args.existingUserId;
       }
 
-      // Create new user
       const userId = await ctx.db.insert("users", {
-        email: args.profile?.email ?? "",
+        email,
         name: args.profile?.name ?? undefined,
-        role: "student", // Default role, can be changed by admin
+        role: getInitialRole(email),
         profileComplete: false,
         createdAt: Date.now(),
       });

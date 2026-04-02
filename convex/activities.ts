@@ -1,5 +1,61 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
+
+const ACTIVITY_TITLE_MAX_LENGTH = 120;
+const ACTIVITY_DESCRIPTION_MAX_LENGTH = 1200;
+const ACTIVITY_CATEGORY_MAX_LENGTH = 50;
+const ACTIVITY_TIME_REQUIRED_MAX_LENGTH = 80;
+const ACTIVITY_LINK_MAX_LENGTH = 250;
+const ACTIVITY_SKILL_MAX_LENGTH = 60;
+const MAX_ACTIVITY_SKILLS = 12;
+
+function normalizeRequiredText(value: string, fieldName: string, maxLength: number) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${fieldName} cannot be empty.`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} must be ${maxLength} characters or fewer.`);
+  }
+  return trimmed;
+}
+
+function normalizeOptionalText(value: string | undefined, fieldName: string, maxLength: number) {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} must be ${maxLength} characters or fewer.`);
+  }
+  return trimmed;
+}
+
+function normalizeSkills(skills: string[]) {
+  const normalized = skills
+    .map((skill) => normalizeRequiredText(skill, "Skill", ACTIVITY_SKILL_MAX_LENGTH))
+    .slice(0, MAX_ACTIVITY_SKILLS);
+
+  const unique = Array.from(new Set(normalized));
+  if (unique.length === 0) {
+    throw new Error("At least one skill is required.");
+  }
+  return unique;
+}
+
+async function requireActivityManager(ctx: any) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("Not authenticated");
+
+  const user = await ctx.db.get(userId);
+  if (!user) throw new Error("User not found");
+
+  if (user.role !== "admin" && user.role !== "partner" && user.role !== "counselor") {
+    throw new Error("Not authorized to manage activities");
+  }
+
+  return userId;
+}
 
 // Get all activities with optional filters
 export const getActivities = query({
@@ -11,6 +67,8 @@ export const getActivities = query({
   },
   handler: async (ctx, args) => {
     let activities = await ctx.db.query("activities").collect();
+
+    activities = activities.filter((a) => a.isActive !== false);
 
     // Filter by category
     if (args.category && args.category !== "all") {
@@ -79,7 +137,7 @@ export const getCategories = query({
   },
 });
 
-// Create a new activity (admin/partner only)
+// Create a new activity (admin/partner/counselor only)
 export const createActivity = mutation({
   args: {
     title: v.string(),
@@ -94,11 +152,29 @@ export const createActivity = mutation({
     link: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const managerId = await requireActivityManager(ctx);
+
+    if (args.startDate && args.endDate && args.endDate < args.startDate) {
+      throw new Error("Activity end date cannot be before start date.");
+    }
 
     return await ctx.db.insert("activities", {
-      ...args,
+      title: normalizeRequiredText(args.title, "Title", ACTIVITY_TITLE_MAX_LENGTH),
+      description: normalizeRequiredText(args.description, "Description", ACTIVITY_DESCRIPTION_MAX_LENGTH),
+      skills: normalizeSkills(args.skills),
+      difficulty: args.difficulty,
+      timeRequired: normalizeRequiredText(
+        args.timeRequired,
+        "Time required",
+        ACTIVITY_TIME_REQUIRED_MAX_LENGTH
+      ),
+      category: normalizeRequiredText(args.category, "Category", ACTIVITY_CATEGORY_MAX_LENGTH),
+      source: args.source,
+      startDate: args.startDate,
+      endDate: args.endDate,
+      link: normalizeOptionalText(args.link, "Link", ACTIVITY_LINK_MAX_LENGTH),
+      isActive: true,
+      createdBy: managerId,
       createdAt: Date.now(),
     });
   },
@@ -108,10 +184,8 @@ export const createActivity = mutation({
 export const seedActivities = mutation({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    await requireActivityManager(ctx);
 
-    // Check if activities already exist
     const existing = await ctx.db.query("activities").first();
     if (existing) {
       return { message: "Activities already seeded" };
