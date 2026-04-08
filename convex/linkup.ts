@@ -200,6 +200,7 @@ export const getMatches = query({
           matchScore,
           matchType,
           lookingFor: linkupProfile?.lookingFor || "",
+          projectDescription: linkupProfile?.projectDescription || "",
         };
       })
     );
