@@ -112,40 +112,51 @@ const quizSteps = [
   },
 ];
 
+const emptyResponses = {
+  interests: [],
+  strengths: [],
+  teamPreference: "",
+  planningStyle: "",
+  values: [],
+  goals: [],
+};
+
 export default function DiscoverPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
-  const [responses, setResponses] = useState<Record<string, string | string[]>>({
-    interests: [],
-    strengths: [],
-    teamPreference: "",
-    planningStyle: "",
-    values: [],
-    goals: [],
-  });
+  const [responses, setResponses] = useState<Record<string, string | string[]>>(emptyResponses);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [showRetakeConfirm, setShowRetakeConfirm] = useState(false);
 
   const saveQuizResponses = useMutation(api.quiz.saveQuizResponses);
   const chatWithAI = useAction(api.ai.chatWithAI);
   const existingResponses = useQuery(api.quiz.getQuizResponses);
   const currentUser = useQuery(api.users.getCurrentUser);
 
+  const hasExistingQuiz = existingResponses?.responses && Object.keys(existingResponses.responses).length > 0;
+
   useEffect(() => {
     if (existingResponses?.responses) {
       setResponses({
-        interests: existingResponses.responses.interests,
-        strengths: existingResponses.responses.strengths,
-        teamPreference: existingResponses.responses.workingStyle.teamPreference,
-        planningStyle: existingResponses.responses.workingStyle.planningStyle,
-        values: existingResponses.responses.values,
-        goals: existingResponses.responses.goals,
+        interests: existingResponses.responses.interests || [],
+        strengths: existingResponses.responses.strengths || [],
+        teamPreference: existingResponses.responses.workingStyle?.teamPreference || "",
+        planningStyle: existingResponses.responses.workingStyle?.planningStyle || "",
+        values: existingResponses.responses.values || [],
+        goals: existingResponses.responses.goals || [],
       });
     }
   }, [existingResponses]);
+
+  const handleRetakeQuiz = () => {
+    setResponses(emptyResponses);
+    setCurrentStep(0);
+    setShowRetakeConfirm(false);
+  };
 
   const currentQuestion = quizSteps[currentStep];
   const progress = ((currentStep + 1) / quizSteps.length) * 100;
@@ -250,9 +261,21 @@ export default function DiscoverPage() {
       <div className="flex-1 max-w-3xl">
         {/* Header */}
         <div className="retro-card-lime p-4 mb-6">
-          <h1 className="text-xl font-black uppercase">PATHFINDER QUIZ</h1>
-          <p className="text-sm font-bold mt-1">Discover your strengths and interests</p>
-          <p className="text-xs mt-1 opacity-70">Dữ liệu làm quiz sẽ được thu thập để cho AI phân tích dữ liệu cách tốt nhất.</p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-xl font-black uppercase">PATHFINDER QUIZ</h1>
+              <p className="text-sm font-bold mt-1">Discover your strengths and interests</p>
+              <p className="text-xs mt-1 opacity-70">Dữ liệu làm quiz sẽ được thu thập để cho AI phân tích dữ liệu cách tốt nhất.</p>
+            </div>
+            {hasExistingQuiz && (
+              <button
+                onClick={() => setShowRetakeConfirm(true)}
+                className="retro-btn retro-btn-pink text-xs whitespace-nowrap ml-4"
+              >
+                🔄 RETAKE QUIZ
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Progress */}
@@ -480,6 +503,37 @@ export default function DiscoverPage() {
                   →
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Retake Quiz Confirmation Modal */}
+      {showRetakeConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="retro-card bg-white p-6 max-w-md w-full">
+            <h2 className="font-black uppercase mb-4 flex items-center gap-2">
+              <span className="text-2xl">⚠️</span> RETAKE QUIZ?
+            </h2>
+            <p className="text-sm font-bold text-gray-600 mb-4">
+              Your current quiz responses will be replaced with new answers. This will also update your Career Map and LinkUp profile based on your new responses.
+            </p>
+            <p className="text-xs font-bold text-gray-500 mb-6">
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRetakeConfirm(false)}
+                className="retro-btn flex-1 text-sm"
+              >
+                KEEP CURRENT
+              </button>
+              <button
+                onClick={handleRetakeQuiz}
+                className="retro-btn retro-btn-pink flex-1 text-sm"
+              >
+                START OVER
+              </button>
             </div>
           </div>
         </div>

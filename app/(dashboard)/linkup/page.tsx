@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -10,7 +10,13 @@ export default function LinkUpPage() {
   const [showIntroModal, setShowIntroModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
   const [introMessage, setIntroMessage] = useState("");
-  const [lookingForText, setLookingForText] = useState("");
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    lookingFor: "",
+    interests: [] as string[],
+    strengths: [] as string[],
+    projectDescription: "",
+  });
   const [isSending, setIsSending] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [showRequestsTab, setShowRequestsTab] = useState<"matches" | "sent" | "received">("matches");
@@ -30,12 +36,17 @@ export default function LinkUpPage() {
   const respondToRequest = useMutation(api.linkup.respondToIntroRequest);
   const checkAchievements = useMutation(api.achievements.checkAndAwardAchievements);
 
-  // Initialize lookingForText from profile
-  useState(() => {
-    if (linkupProfile?.lookingFor) {
-      setLookingForText(linkupProfile.lookingFor);
+  // Initialize form from profile
+  useEffect(() => {
+    if (linkupProfile) {
+      setProfileForm({
+        lookingFor: linkupProfile.lookingFor || "",
+        interests: linkupProfile.interests || [],
+        strengths: linkupProfile.strengths || [],
+        projectDescription: linkupProfile.projectDescription || "",
+      });
     }
-  });
+  }, [linkupProfile]);
 
   const handleRequestIntro = (match: any) => {
     setSelectedMatch(match);
@@ -62,10 +73,17 @@ export default function LinkUpPage() {
   };
 
   const handleSaveProfile = async () => {
-    if (!lookingForText.trim()) return;
+    if (!profileForm.lookingFor.trim()) return;
     setIsSavingProfile(true);
     try {
-      await saveProfile({ lookingFor: lookingForText });
+      await saveProfile({
+        lookingFor: profileForm.lookingFor,
+        interests: profileForm.interests,
+        strengths: profileForm.strengths,
+        projectDescription: profileForm.projectDescription,
+      });
+      await checkAchievements({});
+      setShowEditProfile(false);
     } catch (error) {
       console.error("Failed to save profile:", error);
     } finally {
@@ -84,6 +102,15 @@ export default function LinkUpPage() {
     }
   };
 
+  const toggleArrayItem = (field: "interests" | "strengths", item: string) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      [field]: prev[field].includes(item)
+        ? prev[field].filter((i) => i !== item)
+        : [...prev[field], item],
+    }));
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "bg-[#c8f560]";
     if (score >= 70) return "bg-[#fff06b]";
@@ -91,6 +118,21 @@ export default function LinkUpPage() {
   };
 
   const pendingReceivedCount = receivedRequests?.filter(r => r.status === "pending").length || 0;
+
+  // Available interests and strengths for profile editing
+  const availableInterests = [
+    "Mathematics & Logic", "Science & Experiments", "Literature & Writing",
+    "History & Social Studies", "Art & Design", "Music & Performance",
+    "Technology & Coding", "Sports & Physical Activities", "Business & Economics",
+    "Languages & Communication", "Environmental Studies", "Psychology & Human Behavior",
+  ];
+
+  const availableStrengths = [
+    "Analytical thinking", "Creative problem-solving", "Communication & presentation",
+    "Leadership & organizing", "Attention to detail", "Working with hands",
+    "Understanding people", "Learning quickly", "Staying calm under pressure",
+    "Thinking outside the box", "Collaborating with others", "Working independently",
+  ];
 
   // Check if user has completed the quiz
   if (quizResponse === null) {
@@ -240,8 +282,15 @@ export default function LinkUpPage() {
                   </div>
 
                   {match.lookingFor && (
-                    <div className="retro-card-yellow p-3 mb-4">
+                    <div className="retro-card-yellow p-3 mb-3">
                       <p className="text-sm font-bold">"{match.lookingFor}"</p>
+                    </div>
+                  )}
+
+                  {match.projectDescription && (
+                    <div className="bg-gray-100 border-2 border-black p-3 mb-3">
+                      <p className="text-xs font-black uppercase mb-1">PROJECT:</p>
+                      <p className="text-sm">{match.projectDescription}</p>
                     </div>
                   )}
 
@@ -294,30 +343,145 @@ export default function LinkUpPage() {
             </div>
           )}
 
-          {/* Looking for Teammates Section */}
+          {/* Profile Management */}
           <div className="retro-card bg-white p-6 mb-6">
-            <h2 className="font-black uppercase mb-4 flex items-center gap-2">
-              <span className="text-xl">📢</span> LOOKING FOR TEAMMATES?
-            </h2>
-            <p className="text-sm font-bold text-gray-600 mb-4">
-              Post what you're looking for and let others find you.
-            </p>
-            <textarea
-              placeholder="E.g., Looking for a teammate for the upcoming hackathon. Need someone with design skills..."
-              className="retro-input w-full resize-none"
-              rows={3}
-              value={lookingForText}
-              onChange={(e) => setLookingForText(e.target.value)}
-            />
-            <div className="flex justify-end mt-3">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-black uppercase flex items-center gap-2">
+                <span className="text-xl">👤</span> YOUR LINKUP PROFILE
+              </h2>
               <button
-                onClick={handleSaveProfile}
-                disabled={isSavingProfile || !lookingForText.trim()}
-                className="retro-btn retro-btn-lime text-sm disabled:opacity-50"
+                onClick={() => setShowEditProfile(!showEditProfile)}
+                className="retro-btn retro-btn-blue text-xs"
               >
-                {isSavingProfile ? "SAVING..." : linkupProfile ? "UPDATE REQUEST" : "POST REQUEST"}
+                {showEditProfile ? "CANCEL" : "EDIT PROFILE"}
               </button>
             </div>
+
+            {showEditProfile ? (
+              <div className="space-y-6">
+                {/* Looking For */}
+                <div>
+                  <label className="block font-black uppercase text-xs mb-2">WHAT ARE YOU LOOKING FOR?</label>
+                  <textarea
+                    placeholder="E.g., Looking for a teammate for the upcoming hackathon. Need someone with design skills..."
+                    className="retro-input w-full resize-none"
+                    rows={3}
+                    value={profileForm.lookingFor}
+                    onChange={(e) => setProfileForm({ ...profileForm, lookingFor: e.target.value })}
+                  />
+                </div>
+
+                {/* Project Description */}
+                <div>
+                  <label className="block font-black uppercase text-xs mb-2">PROJECT DESCRIPTION (OPTIONAL)</label>
+                  <textarea
+                    placeholder="Describe any projects you're working on or interested in starting..."
+                    className="retro-input w-full resize-none"
+                    rows={2}
+                    value={profileForm.projectDescription}
+                    onChange={(e) => setProfileForm({ ...profileForm, projectDescription: e.target.value })}
+                  />
+                </div>
+
+                {/* Interests */}
+                <div>
+                  <label className="block font-black uppercase text-xs mb-3">YOUR INTERESTS</label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableInterests.map((interest) => (
+                      <button
+                        key={interest}
+                        onClick={() => toggleArrayItem("interests", interest)}
+                        className={`retro-tag transition-all ${
+                          profileForm.interests.includes(interest)
+                            ? "bg-[#6bb8ff]"
+                            : "bg-gray-200"
+                        }`}
+                      >
+                        {interest}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Strengths */}
+                <div>
+                  <label className="block font-black uppercase text-xs mb-3">YOUR KEY STRENGTHS</label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableStrengths.map((strength) => (
+                      <button
+                        key={strength}
+                        onClick={() => toggleArrayItem("strengths", strength)}
+                        className={`retro-tag transition-all ${
+                          profileForm.strengths.includes(strength)
+                            ? "bg-[#c8f560]"
+                            : "bg-gray-200"
+                        }`}
+                      >
+                        {strength}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowEditProfile(false)}
+                    className="retro-btn text-sm"
+                    disabled={isSavingProfile}
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile || !profileForm.lookingFor.trim()}
+                    className="retro-btn retro-btn-lime text-sm disabled:opacity-50"
+                  >
+                    {isSavingProfile ? "SAVING..." : "SAVE PROFILE"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="border-3 border-black p-4 bg-gray-50">
+                {profileForm.lookingFor ? (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-black uppercase text-gray-500">LOOKING FOR:</p>
+                      <p className="font-bold">"{profileForm.lookingFor}"</p>
+                    </div>
+                    {profileForm.projectDescription && (
+                      <div>
+                        <p className="text-xs font-black uppercase text-gray-500">PROJECT:</p>
+                        <p className="text-sm">{profileForm.projectDescription}</p>
+                      </div>
+                    )}
+                    {profileForm.interests.length > 0 && (
+                      <div>
+                        <p className="text-xs font-black uppercase text-gray-500 mb-2">INTERESTS:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {profileForm.interests.map((i) => (
+                            <span key={i} className="retro-tag bg-[#6bb8ff]">{i}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {profileForm.strengths.length > 0 && (
+                      <div>
+                        <p className="text-xs font-black uppercase text-gray-500 mb-2">STRENGTHS:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {profileForm.strengths.map((s) => (
+                            <span key={s} className="retro-tag bg-[#c8f560]">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500 text-sm">No profile yet. Click "Edit Profile" to create one!</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Browse Teammate Requests Section */}

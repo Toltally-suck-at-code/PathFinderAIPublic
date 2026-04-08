@@ -10,8 +10,10 @@
 
 import type * as achievements from "../achievements.js";
 import type * as activities from "../activities.js";
+import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
 import type * as auth from "../auth.js";
+import type * as careerAlgorithm from "../careerAlgorithm.js";
 import type * as careerMap from "../careerMap.js";
 import type * as counselor from "../counselor.js";
 import type * as http from "../http.js";
@@ -30,8 +32,10 @@ import type {
 declare const fullApi: ApiFromModules<{
   achievements: typeof achievements;
   activities: typeof activities;
+  admin: typeof admin;
   ai: typeof ai;
   auth: typeof auth;
+  careerAlgorithm: typeof careerAlgorithm;
   careerMap: typeof careerMap;
   counselor: typeof counselor;
   http: typeof http;

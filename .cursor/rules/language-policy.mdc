@@ -1,0 +1,37 @@
+---
+description: 
+alwaysApply: true
+---
+
+# Language Policy
+
+## Code Comments
+- Write ALL code comments in **English only**
+- No Chinese comments, no mixed language comments
+- Comments should explain the "why", not the "what"
+
+```typescript
+// ❌ BAD - Chinese comment
+// 计算用户分数
+const score = calculateScore();
+
+// ✅ GOOD - English comment
+// Calculate user score based on quiz responses
+const score = calculateScore();
+```
+
+## User Communication
+- Respond in **English** by default
+- Only switch to other languages (e.g., Chinese) when the user explicitly requests it
+- If user writes in Chinese, respond in Chinese
+- If user writes in English, respond in English
+
+## File Naming
+- Use English file names only (no Chinese characters)
+
+## Documentation
+- README files, docs, and inline documentation must be in English
+
+## Variable/Function Names
+- Always use English identifiers
+- No pinyin or Chinese characters in code

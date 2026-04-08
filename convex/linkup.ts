@@ -20,6 +20,9 @@ export const getLinkupProfile = query({
 export const saveOrUpdateProfile = mutation({
   args: {
     lookingFor: v.string(),
+    interests: v.optional(v.array(v.string())),
+    strengths: v.optional(v.array(v.string())),
+    projectDescription: v.optional(v.string()),
     isVisible: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -34,6 +37,9 @@ export const saveOrUpdateProfile = mutation({
     if (existing) {
       await ctx.db.patch(existing._id, {
         lookingFor: args.lookingFor,
+        interests: args.interests ?? existing.interests,
+        strengths: args.strengths ?? existing.strengths,
+        projectDescription: args.projectDescription ?? existing.projectDescription,
         isVisible: args.isVisible ?? existing.isVisible,
         updatedAt: Date.now(),
       });
@@ -43,6 +49,9 @@ export const saveOrUpdateProfile = mutation({
     return await ctx.db.insert("linkupProfiles", {
       userId,
       lookingFor: args.lookingFor,
+      interests: args.interests ?? [],
+      strengths: args.strengths ?? [],
+      projectDescription: args.projectDescription ?? "",
       isVisible: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),

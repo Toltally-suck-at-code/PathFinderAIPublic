@@ -8,6 +8,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const navItems = [
   { href: "/dashboard", label: "Home", emoji: "🏠" },
@@ -15,7 +16,7 @@ const navItems = [
   { href: "/career-map", label: "Career Map", emoji: "🗺️" },
   { href: "/activities", label: "Activities", emoji: "📋" },
   { href: "/progress", label: "Progress", emoji: "📊" },
-  { href: "/linkup", label: "LinkUp", emoji: "🤝" },
+  { href: "/linkup", label: "LinkUp", emoji: "🤝", hasNotification: true },
 ];
 
 const bottomNavItems = [
@@ -35,6 +36,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const user = useQuery(api.users.getCurrentUser);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const notifications = useNotifications();
 
   const isCounselor = user?.role === "counselor";
 
@@ -107,14 +109,19 @@ export default function DashboardLayout({
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 font-bold text-sm uppercase transition-all ${
+              className={`flex items-center gap-3 px-4 py-3 font-bold text-sm uppercase transition-all relative ${
                 pathname === item.href
                   ? "bg-white border-3 border-black shadow-[4px_4px_0_0_#000]"
                   : "hover:bg-white/50 border-3 border-transparent"
               }`}
             >
               <span className="text-xl">{item.emoji}</span>
-              {item.label}
+              <span>{item.label}</span>
+              {item.hasNotification && notifications.pendingRequests > 0 && (
+                <span className="absolute top-2 right-2 w-5 h-5 bg-[#ff8fab] text-black text-xs font-black flex items-center justify-center border-2 border-black rounded-full">
+                  {notifications.pendingRequests > 9 ? "9+" : notifications.pendingRequests}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -171,14 +178,19 @@ export default function DashboardLayout({
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 font-bold text-sm uppercase ${
+                className={`flex items-center gap-3 px-4 py-3 font-bold text-sm uppercase relative ${
                   pathname === item.href
                     ? "bg-white border-3 border-black"
                     : "border-3 border-transparent"
                 }`}
               >
                 <span className="text-xl">{item.emoji}</span>
-                {item.label}
+                <span>{item.label}</span>
+                {item.hasNotification && notifications.pendingRequests > 0 && (
+                  <span className="absolute top-2 right-2 w-5 h-5 bg-[#ff8fab] text-black text-xs font-black flex items-center justify-center border-2 border-black rounded-full">
+                    {notifications.pendingRequests > 9 ? "9+" : notifications.pendingRequests}
+                  </span>
+                )}
               </Link>
             ))}
             <div className="border-t-4 border-black pt-2 mt-2">

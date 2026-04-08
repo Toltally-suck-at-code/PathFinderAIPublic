@@ -316,139 +316,157 @@ export default function CounselorDashboardPage() {
 
       {/* Interest Trends Tab */}
       {activeTab === "trends" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Top Interests */}
+        <div className="space-y-6">
+          {/* Career Cluster Distribution - Visual Bar Chart */}
           <div className="retro-card bg-white p-6">
-            <h3 className="font-black uppercase mb-4 flex items-center gap-2">
-              <span>💡</span> TOP INTERESTS
-            </h3>
-            {interestTrends?.topInterests && interestTrends.topInterests.length > 0 ? (
-              <div className="space-y-3">
-                {interestTrends.topInterests.map((item, index) => (
-                  <div key={item.name} className="flex items-center gap-3">
-                    <span className="font-black w-6">{index + 1}.</span>
-                    <div className="flex-1">
-                      <div className="flex justify-between mb-1">
-                        <span className="font-bold text-sm">{item.name}</span>
-                        <span className="text-xs font-bold text-gray-600">{item.count} students</span>
-                      </div>
-                      <div className="retro-progress h-2">
-                        <div
-                          className="retro-progress-bar"
-                          style={{
-                            width: `${(item.count / (interestTrends.totalStudents || 1)) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm font-bold text-gray-600">No data available</p>
-            )}
-          </div>
-
-          {/* Top Strengths */}
-          <div className="retro-card bg-white p-6">
-            <h3 className="font-black uppercase mb-4 flex items-center gap-2">
-              <span>💪</span> TOP STRENGTHS
-            </h3>
-            {interestTrends?.topStrengths && interestTrends.topStrengths.length > 0 ? (
-              <div className="space-y-3">
-                {interestTrends.topStrengths.map((item, index) => (
-                  <div key={item.name} className="flex items-center gap-3">
-                    <span className="font-black w-6">{index + 1}.</span>
-                    <div className="flex-1">
-                      <div className="flex justify-between mb-1">
-                        <span className="font-bold text-sm">{item.name}</span>
-                        <span className="text-xs font-bold text-gray-600">{item.count} students</span>
-                      </div>
-                      <div className="retro-progress h-2">
-                        <div
-                          className="retro-progress-bar bg-[#6bb8ff]"
-                          style={{
-                            width: `${(item.count / (interestTrends.totalStudents || 1)) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm font-bold text-gray-600">No data available</p>
-            )}
-          </div>
-
-          {/* Career Cluster Distribution */}
-          <div className="retro-card bg-white p-6 md:col-span-2">
             <h3 className="font-black uppercase mb-4 flex items-center gap-2">
               <span>🎯</span> CAREER CLUSTER DISTRIBUTION
             </h3>
             {careerDistribution && careerDistribution.length > 0 ? (
-              <div className="flex flex-wrap gap-3">
-                {careerDistribution.map((cluster, index) => (
-                  <div
-                    key={cluster.name}
-                    className={`p-3 border-3 border-black ${
-                      index === 0
-                        ? "bg-[#c8f560]"
-                        : index === 1
-                        ? "bg-[#6bb8ff]"
-                        : index === 2
-                        ? "bg-[#ff8fab]"
-                        : "bg-[#fff06b]"
-                    }`}
-                  >
-                    <p className="font-black uppercase text-sm">{cluster.name}</p>
-                    <p className="text-xs font-bold">{cluster.count} points</p>
-                  </div>
-                ))}
+              <div className="space-y-4">
+                {careerDistribution.map((cluster, index) => {
+                  const maxCount = Math.max(...careerDistribution.map(c => c.count));
+                  const percentage = maxCount > 0 ? (cluster.count / maxCount) * 100 : 0;
+                  const colors = ["#c8f560", "#6bb8ff", "#ff8fab", "#fff06b", "#6bffec", "#c4b5fd", "#ffb86b"];
+                  return (
+                    <div key={cluster.name} className="flex items-center gap-3">
+                      <div className="w-32 text-right">
+                        <span className="font-bold text-sm">{cluster.name}</span>
+                      </div>
+                      <div className="flex-1 h-8 bg-gray-100 border-2 border-black relative overflow-hidden">
+                        <div
+                          className="h-full transition-all duration-500 flex items-center justify-end pr-2"
+                          style={{
+                            width: `${percentage}%`,
+                            backgroundColor: colors[index % colors.length],
+                          }}
+                        >
+                          <span className="font-black text-sm">{cluster.count}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm font-bold text-gray-600">No data available</p>
             )}
           </div>
 
-          {/* Top Values */}
-          <div className="retro-card bg-white p-6">
-            <h3 className="font-black uppercase mb-4 flex items-center gap-2">
-              <span>❤️</span> TOP VALUES
-            </h3>
-            {interestTrends?.topValues && interestTrends.topValues.length > 0 ? (
-              <div className="space-y-3">
-                {interestTrends.topValues.slice(0, 5).map((item, index) => (
-                  <div key={item.name} className="flex items-center gap-3">
-                    <span className="font-black w-6">{index + 1}.</span>
-                    <span className="font-bold text-sm flex-1">{item.name}</span>
-                    <span className="retro-tag bg-[#ff8fab]">{item.count}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm font-bold text-gray-600">No data available</p>
-            )}
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Top Interests - Donut-style visual */}
+            <div className="retro-card bg-white p-6">
+              <h3 className="font-black uppercase mb-4 flex items-center gap-2">
+                <span>💡</span> TOP INTERESTS
+              </h3>
+              {interestTrends?.topInterests && interestTrends.topInterests.length > 0 ? (
+                <div className="space-y-4">
+                  {interestTrends.topInterests.slice(0, 5).map((item, index) => (
+                    <div key={item.name} className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-[#6bb8ff] border-3 border-black flex items-center justify-center font-black text-sm">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-1">
+                          <span className="font-bold text-sm">{item.name}</span>
+                          <span className="text-xs font-bold text-gray-600">{item.count} students</span>
+                        </div>
+                        <div className="retro-progress h-3">
+                          <div
+                            className="retro-progress-bar"
+                            style={{
+                              width: `${(item.count / (interestTrends.totalStudents || 1)) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm font-bold text-gray-600">No data available</p>
+              )}
+            </div>
 
-          {/* Top Goals */}
-          <div className="retro-card bg-white p-6">
-            <h3 className="font-black uppercase mb-4 flex items-center gap-2">
-              <span>🎯</span> TOP GOALS
-            </h3>
-            {interestTrends?.topGoals && interestTrends.topGoals.length > 0 ? (
-              <div className="space-y-3">
-                {interestTrends.topGoals.slice(0, 5).map((item, index) => (
-                  <div key={item.name} className="flex items-center gap-3">
-                    <span className="font-black w-6">{index + 1}.</span>
-                    <span className="font-bold text-sm flex-1">{item.name}</span>
-                    <span className="retro-tag bg-[#6bb8ff]">{item.count}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm font-bold text-gray-600">No data available</p>
-            )}
+            {/* Top Strengths */}
+            <div className="retro-card bg-white p-6">
+              <h3 className="font-black uppercase mb-4 flex items-center gap-2">
+                <span>💪</span> TOP STRENGTHS
+              </h3>
+              {interestTrends?.topStrengths && interestTrends.topStrengths.length > 0 ? (
+                <div className="space-y-4">
+                  {interestTrends.topStrengths.slice(0, 5).map((item, index) => (
+                    <div key={item.name} className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-[#c8f560] border-3 border-black flex items-center justify-center font-black text-sm">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-1">
+                          <span className="font-bold text-sm">{item.name}</span>
+                          <span className="text-xs font-bold text-gray-600">{item.count} students</span>
+                        </div>
+                        <div className="retro-progress h-3">
+                          <div
+                            className="retro-progress-bar bg-[#6bb8ff]"
+                            style={{
+                              width: `${(item.count / (interestTrends.totalStudents || 1)) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm font-bold text-gray-600">No data available</p>
+              )}
+            </div>
+
+            {/* Top Values */}
+            <div className="retro-card bg-white p-6">
+              <h3 className="font-black uppercase mb-4 flex items-center gap-2">
+                <span>❤️</span> TOP VALUES
+              </h3>
+              {interestTrends?.topValues && interestTrends.topValues.length > 0 ? (
+                <div className="flex flex-wrap gap-3">
+                  {interestTrends.topValues.slice(0, 6).map((item, index) => (
+                    <div
+                      key={item.name}
+                      className="retro-card p-3 bg-[#ff8fab] flex items-center gap-2"
+                    >
+                      <span className="font-black">{index + 1}</span>
+                      <span className="font-bold text-sm">{item.name}</span>
+                      <span className="retro-tag bg-white ml-1">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm font-bold text-gray-600">No data available</p>
+              )}
+            </div>
+
+            {/* Top Goals */}
+            <div className="retro-card bg-white p-6">
+              <h3 className="font-black uppercase mb-4 flex items-center gap-2">
+                <span>🎯</span> TOP GOALS
+              </h3>
+              {interestTrends?.topGoals && interestTrends.topGoals.length > 0 ? (
+                <div className="flex flex-wrap gap-3">
+                  {interestTrends.topGoals.slice(0, 6).map((item, index) => (
+                    <div
+                      key={item.name}
+                      className="retro-card p-3 bg-[#6bb8ff] flex items-center gap-2"
+                    >
+                      <span className="font-black">{index + 1}</span>
+                      <span className="font-bold text-sm">{item.name}</span>
+                      <span className="retro-tag bg-white ml-1">{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm font-bold text-gray-600">No data available</p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -457,47 +475,88 @@ export default function CounselorDashboardPage() {
       {activeTab === "activities" && (
         <div className="space-y-4">
           {activityProgress && activityProgress.length > 0 ? (
-            activityProgress.map((activity) => (
-              <div key={activity.title} className="retro-card bg-white p-5">
-                <h3 className="font-black uppercase mb-4">{activity.title}</h3>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div className="p-3 bg-gray-100 border-3 border-black">
-                    <p className="text-2xl font-black">{activity.saved}</p>
-                    <p className="text-xs font-bold uppercase">SAVED</p>
+            <>
+              {/* Activity Stats Summary */}
+              <div className="retro-card bg-white p-6">
+                <h3 className="font-black uppercase mb-4 flex items-center gap-2">
+                  <span>📊</span> ACTIVITY ENGAGEMENT OVERVIEW
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div className="border-3 border-black p-4 bg-gray-100">
+                    <p className="text-3xl font-black">
+                      {activityProgress.reduce((sum, a) => sum + a.saved, 0)}
+                    </p>
+                    <p className="text-xs font-bold uppercase mt-1">TOTAL SAVED</p>
                   </div>
-                  <div className="p-3 bg-[#6bb8ff] border-3 border-black">
-                    <p className="text-2xl font-black">{activity.inProgress}</p>
-                    <p className="text-xs font-bold uppercase">IN PROGRESS</p>
+                  <div className="border-3 border-black p-4 bg-[#6bb8ff]">
+                    <p className="text-3xl font-black">
+                      {activityProgress.reduce((sum, a) => sum + a.inProgress, 0)}
+                    </p>
+                    <p className="text-xs font-bold uppercase mt-1">IN PROGRESS</p>
                   </div>
-                  <div className="p-3 bg-[#c8f560] border-3 border-black">
-                    <p className="text-2xl font-black">{activity.completed}</p>
-                    <p className="text-xs font-bold uppercase">COMPLETED</p>
+                  <div className="border-3 border-black p-4 bg-[#c8f560]">
+                    <p className="text-3xl font-black">
+                      {activityProgress.reduce((sum, a) => sum + a.completed, 0)}
+                    </p>
+                    <p className="text-xs font-bold uppercase mt-1">COMPLETED</p>
                   </div>
-                </div>
-                <div className="mt-4">
-                  <div className="retro-progress h-4">
-                    <div
-                      className="retro-progress-bar"
-                      style={{
-                        width: `${
-                          ((activity.completed + activity.inProgress) /
-                            (activity.saved + activity.inProgress + activity.completed || 1)) *
-                          100
-                        }%`,
-                      }}
-                    />
+                  <div className="border-3 border-black p-4 bg-[#fff06b]">
+                    <p className="text-3xl font-black">
+                      {Math.round(
+                        activityProgress.reduce((sum, a) => sum + a.completed, 0) /
+                          (activityProgress.reduce((sum, a) => sum + a.saved + a.inProgress + a.completed, 0) || 1) * 100
+                      )}%
+                    </p>
+                    <p className="text-xs font-bold uppercase mt-1">COMPLETION RATE</p>
                   </div>
-                  <p className="text-xs font-bold text-gray-600 mt-2 text-right">
-                    {Math.round(
-                      ((activity.completed + activity.inProgress) /
-                        (activity.saved + activity.inProgress + activity.completed || 1)) *
-                        100
-                    )}
-                    % engagement rate
-                  </p>
                 </div>
               </div>
-            ))
+
+              {/* Individual Activity Cards */}
+              {activityProgress.map((activity) => (
+                <div key={activity.title} className="retro-card bg-white p-5">
+                  <h3 className="font-black uppercase mb-4">{activity.title}</h3>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-3 bg-gray-100 border-3 border-black">
+                      <p className="text-2xl font-black">{activity.saved}</p>
+                      <p className="text-xs font-bold uppercase">SAVED</p>
+                    </div>
+                    <div className="p-3 bg-[#6bb8ff] border-3 border-black">
+                      <p className="text-2xl font-black">{activity.inProgress}</p>
+                      <p className="text-xs font-bold uppercase">IN PROGRESS</p>
+                    </div>
+                    <div className="p-3 bg-[#c8f560] border-3 border-black">
+                      <p className="text-2xl font-black">{activity.completed}</p>
+                      <p className="text-xs font-bold uppercase">COMPLETED</p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex justify-between text-xs font-bold mb-2">
+                      <span>Engagement Progress</span>
+                      <span>
+                        {Math.round(
+                          ((activity.completed + activity.inProgress) /
+                            (activity.saved + activity.inProgress + activity.completed || 1)) *
+                            100
+                        )}%
+                      </span>
+                    </div>
+                    <div className="retro-progress h-4">
+                      <div
+                        className="retro-progress-bar"
+                        style={{
+                          width: `${
+                            ((activity.completed + activity.inProgress) /
+                              (activity.saved + activity.inProgress + activity.completed || 1)) *
+                            100
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
           ) : (
             <div className="retro-card bg-white text-center py-12">
               <p className="text-4xl mb-4">🎯</p>
