@@ -10,7 +10,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useNotifications } from "@/hooks/useNotifications";
 
-const navItems = [
+type NavItem = { href: string; label: string; emoji: string; hasNotification?: boolean };
+
+const navItems: NavItem[] = [
   { href: "/dashboard", label: "Home", emoji: "🏠" },
   { href: "/discover", label: "Quiz", emoji: "💡" },
   { href: "/career-map", label: "Career Map", emoji: "🗺️" },
@@ -19,11 +21,11 @@ const navItems = [
   { href: "/linkup", label: "LinkUp", emoji: "🤝", hasNotification: true },
 ];
 
-const bottomNavItems = [
+const bottomNavItems: NavItem[] = [
   { href: "/settings", label: "Settings", emoji: "⚙️" },
 ];
 
-const counselorNavItem = { href: "/counselor", label: "Counselor", emoji: "👨‍🏫" };
+const counselorNavItem: NavItem = { href: "/counselor", label: "Counselor", emoji: "👨‍🏫" };
 
 export default function DashboardLayout({
   children,
