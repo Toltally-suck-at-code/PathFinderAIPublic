@@ -218,15 +218,7 @@ export default function DiscoverPage() {
   const handleChat = async () => {
     if (!chatInput.trim() || !currentUser?._id) return;
 
-    const userMessage = chatInput.trim();
-    if (userMessage.length > 500) {
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Please keep messages under 500 characters." },
-      ]);
-      return;
-    }
-
+    const userMessage = chatInput;
     setChatInput("");
     setChatMessages([...chatMessages, { role: "user", content: userMessage }]);
     setIsChatLoading(true);

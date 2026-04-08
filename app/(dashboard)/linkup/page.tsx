@@ -44,10 +44,6 @@ export default function LinkUpPage() {
 
   const handleSendIntroRequest = async () => {
     if (!selectedMatch || !introMessage.trim()) return;
-    if (introMessage.trim().length > 280) {
-      alert("Introduction messages must be 280 characters or fewer.");
-      return;
-    }
     setIsSending(true);
     try {
       await createIntroRequest({
@@ -67,10 +63,6 @@ export default function LinkUpPage() {
 
   const handleSaveProfile = async () => {
     if (!lookingForText.trim()) return;
-    if (lookingForText.trim().length > 280) {
-      alert("Teammate request text must be 280 characters or fewer.");
-      return;
-    }
     setIsSavingProfile(true);
     try {
       await saveProfile({ lookingFor: lookingForText });

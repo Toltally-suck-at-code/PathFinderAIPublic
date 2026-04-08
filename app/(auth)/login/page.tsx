@@ -16,7 +16,7 @@ export default function LoginPage() {
       await signIn("google", { redirectTo: "/dashboard" });
     } catch (err) {
       setError(
-        "Only approved Vinschool email addresses are allowed for this pilot."
+        "Only Vinschool student email addresses (@stu.vinschool.edu.vn) are allowed."
       );
       setIsLoading(false);
     }
@@ -107,7 +107,7 @@ export default function LoginPage() {
 
           {/* Info */}
           <p className="mt-4 text-center text-xs font-bold text-gray-500 uppercase">
-            Approved Vinschool emails only
+            Vinschool emails only
           </p>
         </div>
 

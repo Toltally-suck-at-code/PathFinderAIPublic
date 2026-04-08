@@ -2,19 +2,6 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
-const REFLECTION_MAX_LENGTH = 2000;
-
-function normalizeReflectionContent(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    throw new Error("Reflection content cannot be empty");
-  }
-  if (trimmed.length > REFLECTION_MAX_LENGTH) {
-    throw new Error(`Reflection content must be ${REFLECTION_MAX_LENGTH} characters or fewer.`);
-  }
-  return trimmed;
-}
-
 // Get user's reflections
 export const getReflections = query({
   args: {
@@ -50,11 +37,13 @@ export const createReflection = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    const normalizedContent = normalizeReflectionContent(args.content);
+    if (!args.content.trim()) {
+      throw new Error("Reflection content cannot be empty");
+    }
 
     return await ctx.db.insert("reflections", {
       userId,
-      content: normalizedContent,
+      content: args.content.trim(),
       type: args.type || "general",
       activityId: args.activityId,
       prompt: args.prompt,
@@ -79,7 +68,7 @@ export const updateReflection = mutation({
     }
 
     await ctx.db.patch(args.reflectionId, {
-      content: normalizeReflectionContent(args.content),
+      content: args.content.trim(),
     });
 
     return args.reflectionId;

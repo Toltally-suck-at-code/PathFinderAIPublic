@@ -36,7 +36,7 @@ export default function DashboardLayout({
   const user = useQuery(api.users.getCurrentUser);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isCounselor = user?.role === "counselor" || user?.role === "admin";
+  const isCounselor = user?.role === "counselor";
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {

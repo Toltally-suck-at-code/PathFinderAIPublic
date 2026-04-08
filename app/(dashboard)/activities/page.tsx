@@ -60,11 +60,9 @@ export default function ActivitiesPage() {
   // Seed activities if none exist
   useEffect(() => {
     if (activities && activities.length === 0) {
-      seedActivities({}).catch(() => {
-        // Non-admin users may not have permission to seed data.
-      });
+      seedActivities({});
     }
-  }, [activities, seedActivities]);
+  }, [activities]);
 
   const difficultyColors: Record<string, string> = {
     beginner: "bg-[#c8f560]",

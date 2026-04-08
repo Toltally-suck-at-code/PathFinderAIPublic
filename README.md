@@ -1,77 +1,36 @@
-# PathFinderAI (Pilot Build)
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-PathFinderAI is a Vinschool-focused career guidance and collaboration web app.
+## Getting Started
 
-## Core pilot modules
-
-- Discover: guided career quiz
-- Career Map: AI-assisted + deterministic roadmap generation
-- Activities: curated school/partner opportunities
-- Progress: saved/completed activities, achievements, reflections
-- LinkUp: peer matching with intro-request workflow
-- Counselor Dashboard: cohort-level visibility and exports
-
-## Tech stack
-
-- Next.js App Router + React
-- Convex backend + auth
-- Google OAuth (restricted to approved Vinschool domains)
-- Gemini API for AI assistance with deterministic fallback
-
-## Environment setup
-
-Copy `.env.example` to `.env.local` and fill all required values.
-
-Required variables:
-
-- `CONVEX_DEPLOYMENT`
-- `NEXT_PUBLIC_CONVEX_URL`
-- `AUTH_GOOGLE_ID`
-- `AUTH_GOOGLE_SECRET`
-- `GEMINI_API_KEY`
-
-Pilot controls:
-
-- `ALLOWED_EMAIL_DOMAINS` (default: `stu.vinschool.edu.vn,vinschool.edu.vn`)
-- `PILOT_ADMIN_EMAILS` (optional bootstrap admin emails)
-- `PILOT_COUNSELOR_EMAILS` (optional bootstrap counselor emails)
-- `GEMINI_MODEL` (optional, default `gemini-2.5-flash`)
-
-## Local development
+First, run the development server:
 
 ```bash
-npm install
 npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-App runs at `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Scripts
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-- `npm run dev` - frontend + Convex backend
-- `npm run dev:frontend` - Next.js only
-- `npm run dev:backend` - Convex only
-- `npm run lint` - ESLint
-- `npm run build` - production build
-- `npm run start` - production server
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Pilot hardening included
+## Learn More
 
-- Role-aware auth bootstrapping from allowed domains and bootstrap email lists
-- Server-side validation for quiz inputs, reflections, LinkUp text, and activity creation
-- LinkUp privacy protections (emails only shown after accepted intro)
-- Basic anti-abuse limits for intro requests and AI usage
-- Role-gated activity creation/seeding (admin/counselor/partner)
-- Counselor/admin shared access to counselor dashboard
+To learn more about Next.js, take a look at the following resources:
 
-## Known pilot constraints
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-- No automated test suite yet
-- No in-app admin UI for role management yet (backend mutation exists)
-- No production monitoring/error-reporting integration yet
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Next recommended pilot tasks
+## Deploy on Vercel
 
-1. Add admin page for role assignment and activity moderation.
-2. Add basic end-to-end smoke tests for auth, quiz, career map, LinkUp.
-3. Add operational monitoring and error tracking.
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

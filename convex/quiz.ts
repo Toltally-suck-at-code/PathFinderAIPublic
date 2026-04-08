@@ -2,27 +2,6 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { auth } from "./auth";
 
-const MAX_MULTI_SELECT = 5;
-
-function dedupeAndTrim(values: string[]) {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-}
-
-function ensureSelections(values: string[], fieldName: string) {
-  if (values.length === 0) {
-    throw new Error(`${fieldName} requires at least one selection.`);
-  }
-  if (values.length > MAX_MULTI_SELECT) {
-    throw new Error(`${fieldName} allows up to ${MAX_MULTI_SELECT} selections.`);
-  }
-}
-
-function ensureSingleChoice(value: string, fieldName: string, allowed: string[]) {
-  if (!allowed.includes(value)) {
-    throw new Error(`Invalid ${fieldName} selection.`);
-  }
-}
-
 // Quiz questions data
 export const quizQuestions = {
   interests: {
@@ -160,93 +139,29 @@ export const saveQuizResponses = mutation({
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    const interests = dedupeAndTrim(args.responses.interests);
-    const strengths = dedupeAndTrim(args.responses.strengths);
-    const values = dedupeAndTrim(args.responses.values);
-    const goals = dedupeAndTrim(args.responses.goals);
-
-    ensureSelections(interests, "Interests");
-    ensureSelections(strengths, "Strengths");
-    ensureSelections(values, "Values");
-    ensureSelections(goals, "Goals");
-
-    const allowedInterests = quizQuestions.interests.options;
-    const allowedStrengths = quizQuestions.strengths.options;
-    const allowedValues = quizQuestions.values.options;
-    const allowedGoals = quizQuestions.goals.options;
-    const allowedTeamPreferences = quizQuestions.workingStyle.teamPreference.options.map(
-      (option) => option.value
-    );
-    const allowedPlanningStyles = quizQuestions.workingStyle.planningStyle.options.map(
-      (option) => option.value
-    );
-
-    for (const interest of interests) {
-      if (!allowedInterests.includes(interest)) {
-        throw new Error("Invalid interest selection.");
-      }
-    }
-
-    for (const strength of strengths) {
-      if (!allowedStrengths.includes(strength)) {
-        throw new Error("Invalid strength selection.");
-      }
-    }
-
-    for (const value of values) {
-      if (!allowedValues.includes(value)) {
-        throw new Error("Invalid value selection.");
-      }
-    }
-
-    for (const goal of goals) {
-      if (!allowedGoals.includes(goal)) {
-        throw new Error("Invalid goal selection.");
-      }
-    }
-
-    ensureSingleChoice(
-      args.responses.workingStyle.teamPreference,
-      "team preference",
-      allowedTeamPreferences
-    );
-    ensureSingleChoice(
-      args.responses.workingStyle.planningStyle,
-      "planning style",
-      allowedPlanningStyles
-    );
-
-    const normalizedResponses = {
-      interests,
-      strengths,
-      workingStyle: {
-        teamPreference: args.responses.workingStyle.teamPreference,
-        planningStyle: args.responses.workingStyle.planningStyle,
-      },
-      values,
-      goals,
-    };
-
+    // Check if user already has quiz responses
     const existing = await ctx.db
       .query("quizResponses")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
 
     if (existing) {
+      // Update existing responses
       await ctx.db.patch(existing._id, {
-        responses: normalizedResponses,
+        responses: args.responses,
         completedAt: Date.now(),
         version: existing.version + 1,
       });
       return existing._id;
+    } else {
+      // Create new responses
+      return await ctx.db.insert("quizResponses", {
+        userId,
+        responses: args.responses,
+        completedAt: Date.now(),
+        version: 1,
+      });
     }
-
-    return await ctx.db.insert("quizResponses", {
-      userId,
-      responses: normalizedResponses,
-      completedAt: Date.now(),
-      version: 1,
-    });
   },
 });
 

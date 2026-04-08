@@ -99,7 +99,6 @@ export default defineSchema({
     endDate: v.optional(v.number()),
     isActive: v.optional(v.boolean()),
     source: v.union(v.literal("school"), v.literal("partner")),
-    link: v.optional(v.string()),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
   })
